@@ -5,6 +5,7 @@ from streamlit_folium import st_folium
 from scraper import fetch_latest_news
 from nlp_engine import process_news_item
 from db_manager import sync_news_with_db, load_database
+from analytics import compute_district_crime_index, calculate_time_decay_severity
 
 # Coordinate geografiche indicative dei quartieri di Pescara
 DISTRICT_COORDS = {
@@ -48,19 +49,18 @@ st.sidebar.header("⚙️ Pannello di Controllo")
 limit = st.sidebar.slider("Notizie da cercare per fonte:", min_value=1, max_value=20, value=10)
 st.sidebar.divider()
 
-# Tasto per forzare l'ingestione
 if st.sidebar.button("🔄 Aggiorna Notizie"):
     with st.spinner("Scraping e analisi in corso..."):
         raw_news = fetch_latest_news(limit_per_feed=limit)
         processed = [process_news_item(item) for item in raw_news]
         clean_news = [item for item in processed if item is not None]
         
-        # Sincronizza col DB
         _, added = sync_news_with_db(clean_news)
         st.sidebar.success(f"Aggiunte {added} nuove notizie al DB!")
 
-# Carica l'intero database storico
+# Carica Database
 all_news = load_database()
+district_stats = compute_district_crime_index(all_news)
 
 # Metriche Generali
 total_news = len(all_news)
@@ -68,12 +68,12 @@ avg_severity = sum(item["severity"] for item in all_news) / total_news if total_
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(label="Status Sistema", value="Online", delta="DB Persistente Attivo")
+    st.metric(label="Status Sistema", value="Online", delta="Decadimento Temporale Attivo")
 with col2:
-    st.metric(label="Notizie nel Database", value=total_news, delta=f"{total_news} storiche")
+    st.metric(label="Notizie Tracciate", value=total_news, delta=f"{len(district_stats)} Quartieri")
 with col3:
     st.metric(
-        label="Severity Index Medio", 
+        label="Severity Media (Storica)", 
         value=f"{avg_severity:.1f} / 10", 
         delta="Livello Allerta" if avg_severity > 5 else "Nella Norma",
         delta_color="inverse" if avg_severity > 5 else "normal"
@@ -81,52 +81,82 @@ with col3:
 
 st.write("---")
 
-# Mappa Geospaziale
-st.subheader("🗺️ Mappa Storica Reati & Eventi")
+# Mappa + Ranking Quartieri (Layout a due colonne)
+col_map, col_rank = st.columns([2, 1])
 
-m = folium.Map(location=[42.4643, 14.2142], zoom_start=13, tiles="CartoDB dark_matter")
+with col_map:
+    st.subheader("🗺️ Mappa Termica Dinamica")
+    m = folium.Map(location=[42.4643, 14.2142], zoom_start=13, tiles="CartoDB dark_matter")
 
-for item in all_news:
-    district = item.get("district", "Centro")
-    coords = DISTRICT_COORDS.get(district, DISTRICT_COORDS["Centro"])
-    severity = item.get("severity", 2)
-    color = "#ff4b4b" if severity >= 7 else ("#faca15" if severity >= 4 else "#3182ce")
+    for item in all_news:
+        district = item.get("district", "Centro")
+        coords = DISTRICT_COORDS.get(district, DISTRICT_COORDS["Centro"])
+        base_sev = item.get("severity", 2)
+        
+        # Severità decaduta nel tempo
+        decayed_sev, days_ago = calculate_time_decay_severity(base_sev, item.get("published", ""))
+        
+        color = "#ff4b4b" if decayed_sev >= 5 else ("#faca15" if decayed_sev >= 2 else "#3182ce")
+        
+        popup_html = f"""
+        <div style='font-family: sans-serif; width: 220px;'>
+            <h4 style='margin-bottom:5px;'>{district}</h4>
+            <p><b>Categoria:</b> {item['category']}</p>
+            <p><b>Score Iniziale:</b> {base_sev}/10</p>
+            <p><b>Score Attuale (Attualizzato):</b> <span style='color:{color}; font-weight:bold;'>{decayed_sev}/10</span></p>
+            <p style='font-size:11px; color:gray;'>Età notizia: {days_ago} giorni fa</p>
+            <a href='{item['link']}' target='_blank'>Leggi articolo</a>
+        </div>
+        """
+        
+        folium.CircleMarker(
+            location=coords,
+            radius=6 + (decayed_sev * 2),  # Il cerchio rimpicciolisce col passare dei giorni
+            popup=folium.Popup(popup_html, max_width=250),
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.6,
+            weight=2
+        ).add_to(m)
+
+    st_folium(m, width="100%", height=450)
+
+with col_rank:
+    st.subheader("🏆 Crime Index Quartieri")
+    st.caption("Punteggio accumulato ponderato nel tempo")
     
-    popup_html = f"""
-    <div style='font-family: sans-serif; width: 220px;'>
-        <h4 style='margin-bottom:5px;'>{district}</h4>
-        <p><b>Categoria:</b> {item['category']}</p>
-        <p><b>Severity:</b> <span style='color:{color}; font-weight:bold;'>{severity}/10</span></p>
-        <p style='font-size:12px;'>{item['title']}</p>
-        <a href='{item['link']}' target='_blank'>Leggi articolo</a>
-    </div>
-    """
+    # Ordina i quartieri dal più critico al meno critico
+    sorted_districts = sorted(
+        district_stats.items(), 
+        key=lambda x: x[1]["total_score"], 
+        reverse=True
+    )
     
-    folium.CircleMarker(
-        location=coords,
-        radius=8 + (severity * 1.5),
-        popup=folium.Popup(popup_html, max_width=250),
-        color=color,
-        fill=True,
-        fill_color=color,
-        fill_opacity=0.6,
-        weight=2
-    ).add_to(m)
-
-st_folium(m, width="100%", height=450)
+    if not sorted_districts:
+        st.info("Nessun dato ancora disponibile.")
+    else:
+        for dist_name, stats in sorted_districts:
+            score = stats["total_score"]
+            badge = "🔴" if score >= 10 else ("🟡" if score >= 4 else "🟢")
+            st.markdown(f"**{badge} {dist_name}**")
+            st.progress(min(score / 20.0, 1.0))
+            st.caption(f"Score Attivo: **{score}** | Eventi: **{stats['news_count']}**")
+            st.divider()
 
 st.write("---")
 
-# Feed Notizie da DB
+# Feed Notizie
 st.subheader("📡 Feed Storico Intelligence")
-
 if not all_news:
-    st.info("Il database è attualmente vuoto. Clicca su '🔄 Esegui Ingestione Notizie' nella sidebar per iniziare.")
+    st.info("Il database è attualmente vuoto.")
 else:
-    for item in reversed(all_news):  # Dalla più recente alla più vecchia
-        sev = item['severity']
-        badge_color = "🔴" if sev >= 7 else ("🟡" if sev >= 4 else "🟢")
-        header_text = f"{badge_color} [{item['district']}] {item['title']}"
+    for item in reversed(all_news):
+        base_sev = item['severity']
+        decayed_sev, days_ago = calculate_time_decay_severity(base_sev, item.get("published", ""))
+        
+        badge_color = "🔴" if decayed_sev >= 5 else ("🟡" if decayed_sev >= 2 else "🟢")
+        header_text = f"{badge_color} [{item['district']}] {item['title']} ({days_ago} gg fa)"
         
         with st.expander(header_text):
             c1, c2, c3 = st.columns(3)
@@ -135,7 +165,7 @@ else:
             with c2:
                 st.write(f"**🏷️ Categoria:** {item['category']}")
             with c3:
-                st.write(f"**⚠️ Severity Score:** {item['severity']}/10")
+                st.write(f"**⚠️ Severity (Oggi / Origine):** {decayed_sev} / {base_sev}")
             
             st.divider()
             st.write(f"**Sommario:** {item['summary']}")
