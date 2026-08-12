@@ -6,6 +6,12 @@ EXCLUDE_CITIES = [
     "spoltore", "silvi", "pineto", "giulianova", "avezzano", "ortona", "penne"
 ]
 
+# Parole chiave che indicano eventi sanitari/sociali (NON reati)
+HEALTH_SOCIAL_KEYWORDS = [
+    "donare", "donazione", "avis", "fidas", "trasfusione", 
+    "carenza sangue", "raccolta sangue", "centro trasfusionale"
+]
+
 # Mappatura dettagliata delle vie e quartieri di Pescara Città
 PEST_LOCATIONS = {
     "Rancitelli": ["rancitelli", "via tavo", "via ferrarese", "via lago di capestrano", "via lago di campotosto"],
@@ -46,6 +52,14 @@ def is_pescara_news(text):
                 return False
     return True
 
+def is_health_or_social_news(text):
+    """Filtra notizie sanitarie/sociali (es. donazione sangue)."""
+    text_lower = text.lower()
+    for kw in HEALTH_SOCIAL_KEYWORDS:
+        if kw in text_lower:
+            return True
+    return False
+
 def extract_location(text):
     """Identifica il quartiere specifico di Pescara."""
     text_lower = text.lower()
@@ -53,15 +67,20 @@ def extract_location(text):
         for kw in keywords:
             if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
                 return district
-    
-    # Se cita Pescara in generale
+            
+            
     if "pescara" in text_lower:
-        return "Centro"  # Assegniamo al centro se è Pescara generico per evitare sovrapposizioni fisse
+        return "Centro"
     return None
 
 def analyze_severity_and_category(text):
-    """Calcola Severity Index."""
+    """Calcola Severity Index ignorando falsi positivi sanitari."""
     text_lower = text.lower()
+    
+    # Se la notizia è medica/sanitaria (es. Avis, donazioni), la classifichiamo come notizia di servizio a bassissima severità
+    if is_health_or_social_news(text):
+        return "Servizio / Sanità", 1
+
     for category, (score, keywords) in CRIME_KEYWORDS.items():
         for kw in keywords:
             if kw in text_lower:
@@ -78,7 +97,7 @@ def process_news_item(item):
         
     district = extract_location(full_text)
     if not district:
-        return None  # Se non è riconducibile a Pescara, la scartiamo
+        return None
         
     category, severity = analyze_severity_and_category(full_text)
     
