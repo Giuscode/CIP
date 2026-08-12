@@ -1,40 +1,66 @@
 import re
 
-# Database di parole chiave per la geolocalizzazione sui quartieri/zone di Pescara
+# Comuni da escludere tassativamente (Geofencing)
+EXCLUDE_CITIES = [
+    "montesilvano", "chieti", "l'aquila", "teramo", "sulmona", 
+    "spoltore", "silvi", "pineto", "giulianova", "avezzano", "ortona", "penne"
+]
+
+# Mappatura dettagliata delle vie e quartieri di Pescara Città
 PEST_LOCATIONS = {
-    "Rancitelli": ["rancitelli", "via tavo", "ferrarese"],
-    "Fontanelle": ["fontanelle", "via caduti per la liberta"],
-    "Centro": ["corso umberto", "piazza salotto", "piazza della rinascita", "via firenze", "via cesare battisti", "centro", "piazza santa caterina", ],
-    "Pescara Vecchia": ["pescara vecchia", "corso manthonè", "via delle caserme", "piazza unione"],
-    "Portanuova": ["portanuova", "viale marconi", "via d'annunzio", "piazza garibaldi", "stadio", "viale pindaro"],
-    "Colli": ["colli", "via di sotto", "via colle innamorati"],
-    "Strada Parco": ["strada parco"],
-    "Zanni": ["zanni", "via nausicaa", "borgo marino"],
-    "Tiburtina / Villa Redenta": ["tiburtina", "via aterno", "villa redenta"],
-    "San Silvestro": ["san silvestro", "strada della bonifica"]
+    "Rancitelli": ["rancitelli", "via tavo", "via ferrarese", "via lago di capestrano", "via lago di campotosto"],
+    "Fontanelle": ["fontanelle", "via caduti per la liberta", "via fenice"],
+    "Centro": [
+        "corso umberto", "piazza salotto", "piazza della rinascita", "via firenze", 
+        "via cesare battisti", "via nicola fabrizi", "via corso vittorio emanuele", "piazza della repubblica"
+    ],
+    "Pescara Vecchia": ["pescara vecchia", "corso manthonè", "via delle caserme", "piazza unione", "via bastioni"],
+    "Portanuova": [
+        "portanuova", "viale marconi", "via d'annunzio", "piazza garibaldi", 
+        "stadio", "viale pindaro", "via del circuito", "viale colombo"
+    ],
+    "Colli": ["colli", "via di sotto", "via colle innamorati", "via rigopiano", "san giuseppe"],
+    "Srada Parco": ["strada parco"],
+    "Zanni": ["zanni", "via nausicaa", "borgo marino", "viale riviera"],
+    "Tiburtina / Villa Redenta": ["tiburtina", "via aterno", "villa redenta", "via tirino"],
+    "San Silvestro": ["san silvestro", "strada della bonifica", "san silvestro spiaggia"]
 }
 
-# Parole chiave e relativi punteggi di gravità (Severity Score 1-10)
+# Categorie reati e Severity
 CRIME_KEYWORDS = {
-    "Omicidio / Ferimento Grave": (10, ["omicidio", "sparatoria", "accoltellato", "ferito grave", "sangue", "morto"]),
-    "Rapina / Aggressione": (8, ["rapina", "aggressione", "scippo", "pestaggio", "rissa", "minacciato"]),
-    "Spaccio / Droga": (6, ["spaccio", "droga", "cocaina", "eroina", "pusher", "sequestro sostanze"]),
-    "Furto / Rattoppo": (5, ["furto", "rubato", "ladri", "spaccata", "topi d'appartamento", "auto rubata"]),
+    "Omicidio / Ferimento Grave": (10, ["omicidio", "sparatoria", "accoltellato", "ferito grave", "sangue", "morto", "fucilata"]),
+    "Rapina / Aggressione": (8, ["rapina", "aggressione", "scippo", "pestaggio", "rissa", "minacciato", "arrestato", "arresto"]),
+    "Spaccio / Droga": (6, ["spaccio", "droga", "cocaina", "eroina", "pusher", "sequestro sostanze", "hashish"]),
+    "Furto / Rattoppo": (5, ["furto", "rubato", "ladri", "spaccata", "topi d'appartamento", "auto rubata", "a fuoco", "incendio"]),
     "Atti Vandalici / Degrado": (3, ["vandali", "degrado", "schiamazzi", "danni", "incendio cassonetto"]),
-    "Incidente Stradale": (4, ["incidente", "scontro", "investito", "ribaltata", "tampone"])
+    "Incidente Stradale": (4, ["incidente", "scontro", "investito", "ribaltata", "tampone", "investita"])
 }
+
+def is_pescara_news(text):
+    """Verifica che la notizia non parli esplicitamente di altre città abruzzesi."""
+    text_lower = text.lower()
+    for city in EXCLUDE_CITIES:
+        if re.search(r'\b' + re.escape(city) + r'\b', text_lower):
+            # Se cita Montesilvano/Chieti ma NON cita esplicitamente Pescara, la escludiamo
+            if "pescara" not in text_lower:
+                return False
+    return True
 
 def extract_location(text):
-    """Identifica il quartiere di Pescara menzionato nel testo."""
+    """Identifica il quartiere specifico di Pescara."""
     text_lower = text.lower()
     for district, keywords in PEST_LOCATIONS.items():
         for kw in keywords:
             if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
                 return district
-    return "Pescara (Generico)"
+    
+    # Se cita Pescara in generale
+    if "pescara" in text_lower:
+        return "Centro"  # Assegniamo al centro se è Pescara generico per evitare sovrapposizioni fisse
+    return None
 
 def analyze_severity_and_category(text):
-    """Classifica la notizia e assegna uno score di gravità (1-10)."""
+    """Calcola Severity Index."""
     text_lower = text.lower()
     for category, (score, keywords) in CRIME_KEYWORDS.items():
         for kw in keywords:
@@ -43,26 +69,20 @@ def analyze_severity_and_category(text):
     return "Cronaca Generica", 2
 
 def process_news_item(item):
-    """Arricchisce il dizionario della notizia con location, categoria e severity."""
+    """Elabora e filtra la notizia."""
     full_text = f"{item.get('title', '')} {item.get('summary', '')}"
     
+    # Filtro Geofencing
+    if not is_pescara_news(full_text):
+        return None
+        
     district = extract_location(full_text)
+    if not district:
+        return None  # Se non è riconducibile a Pescara, la scartiamo
+        
     category, severity = analyze_severity_and_category(full_text)
     
     item["district"] = district
     item["category"] = category
     item["severity"] = severity
     return item
-
-if __name__ == "__main__":
-    # Test di verifica locale
-    sample_text = "Pescara: ferito grave in via Aterno, arrestato un 66enne per aggressione"
-    print("🧪 Test Engine NLP su notizia di esempio:")
-    print(f"Testo: '{sample_text}'")
-    
-    dummy_item = {"title": sample_text, "summary": ""}
-    processed = process_news_item(dummy_item)
-    
-    print(f"📍 Quartiere Rilevato: {processed['district']}")
-    print(f"🏷️ Categoria: {processed['category']}")
-    print(f"⚠️ Severity Index: {processed['severity']}/10")

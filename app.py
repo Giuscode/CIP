@@ -1,6 +1,22 @@
 import streamlit as st
+import folium
+from streamlit_folium import st_folium
 from scraper import fetch_latest_news
 from nlp_engine import process_news_item
+
+# Coordinate geografiche indicative dei quartieri di Pescara
+DISTRICT_COORDS = {
+    "Rancitelli": (42.4550, 14.1950),
+    "Fontanelle": (42.4380, 14.2050),
+    "Centro": (42.4690, 14.2150),
+    "Pescara Vecchia": (42.4610, 14.2130),
+    "Portanuova": (42.4560, 14.2230),
+    "Colli": (42.4750, 14.1900),
+    "Zanni": (42.4880, 14.1850),
+    "Tiburtina / Villa Redenta": (42.4480, 14.2000),
+    "San Silvestro": (42.4180, 14.2400),
+    "Pescara (Generico)": (42.4643, 14.2142)
+}
 
 # Configurazione della pagina "Palantir Style"
 st.set_page_config(
@@ -25,30 +41,30 @@ st.caption("Sistema iperlocale di monitoraggio e analisi notizie di cronaca")
 
 st.divider()
 
+st.divider()
+
 # Sidebar per i controlli
 st.sidebar.header("⚙️ Pannello di Controllo")
 limit = st.sidebar.slider("Numero notizie per fonte:", min_value=1, max_value=20, value=5)
 st.sidebar.divider()
-st.sidebar.info("Modulo 1 (RSS) & Modulo 2 (NLP) Attivi.")
+st.sidebar.info("Modulo 1 (RSS), Modulo 2 (NLP) & Modulo 3 (Mappa) Attivi.")
 
 # Fetch e processing delle notizie
-with st.spinner("Analisi semantica e geolocalizzazione in corso..."):
+with st.spinner("Analisi dati geospaziali in corso..."):
     raw_news = fetch_latest_news(limit_per_feed=limit)
-    processed_news = [process_news_item(item) for item in raw_news]
+    processed_news = [process_news_item(item) for item in raw_news if item is not None]
+    processed_news = [item for item in processed_news if item is not None]
 
 # Calcolo Metriche Generali
 total_news = len(processed_news)
-if total_news > 0:
-    avg_severity = sum(item["severity"] for item in processed_news) / total_news
-else:
-    avg_severity = 0.0
+avg_severity = sum(item["severity"] for item in processed_news) / total_news if total_news > 0 else 0.0
 
 # Metric Cards
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(label="Status Sistema", value="Online", delta="Scraper + NLP Active")
+    st.metric(label="Status Sistema", value="Online", delta="All Modules Active")
 with col2:
-    st.metric(label="Notizie Ingestite", value=total_news, delta=f"{total_news} elaborate")
+    st.metric(label="Notizie Analizzate", value=total_news, delta=f"{total_news} elaborate")
 with col3:
     st.metric(
         label="Severity Index Medio", 
@@ -59,17 +75,62 @@ with col3:
 
 st.write("---")
 
-# Visualizzazione Feed Notizie Processate
+# --- SEZIONE MAPPA GEOSPAZIALE ---
+st.subheader("🗺️ Mappa Geospaziale Reati & Eventi")
+
+# Creazione Mappa Folium (Centrata su Pescara, Tema Scuro)
+m = folium.Map(
+    location=[42.4643, 14.2142], 
+    zoom_start=13, 
+    tiles="CartoDB dark_matter"
+)
+
+# Aggiunta dei marker dinamici sulla mappa
+for item in processed_news:
+    district = item.get("district", "Pescara (Generico)")
+    coords = DISTRICT_COORDS.get(district, DISTRICT_COORDS["Pescara (Generico)"])
+    severity = item.get("severity", 2)
+    
+    # Selezione colore in base alla gravità
+    color = "#ff4b4b" if severity >= 7 else ("#faca15" if severity >= 4 else "#3182ce")
+    
+    # Popup informativo HTML
+    popup_html = f"""
+    <div style='font-family: sans-serif; width: 220px;'>
+        <h4 style='margin-bottom:5px;'>{item['district']}</h4>
+        <p><b>Categoria:</b> {item['category']}</p>
+        <p><b>Severity:</b> <span style='color:{color}; font-weight:bold;'>{severity}/10</span></p>
+        <p style='font-size:12px;'>{item['title']}</p>
+        <a href='{item['link']}' target='_blank'>Leggi articolo</a>
+    </div>
+    """
+    
+    # Disegna cerchio proporzionale sulla mappa
+    folium.CircleMarker(
+        location=coords,
+        radius=8 + (severity * 1.5),  # Più è grave, più il cerchio è grande
+        popup=folium.Popup(popup_html, max_width=250),
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.6,
+        weight=2
+    ).add_to(m)
+
+# Renderizza la mappa in Streamlit
+st_folium(m, width="100%", height=450)
+
+st.write("---")
+
+# Visualizzazione Feed Dettagliato
 st.subheader("📡 Feed Intelligence Cronaca Locale")
 
 if not processed_news:
     st.warning("Nessuna notizia trovata al momento.")
 else:
     for idx, item in enumerate(processed_news, 1):
-        # Selezione colore in base alla severità
         sev = item['severity']
         badge_color = "🔴" if sev >= 7 else ("🟡" if sev >= 4 else "🟢")
-        
         header_text = f"{badge_color} [{item['district']}] {item['title']}"
         
         with st.expander(header_text):
