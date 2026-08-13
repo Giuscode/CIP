@@ -7,7 +7,9 @@ from datetime import datetime
 RSS_FEEDS = {
     "IlPescara": "https://www.ilpescara.it/rss/cronaca/",
     "Rete8": "https://www.rete8.it/feed/",
-    # Possiamo aggiungere altre fonti con feed validi
+    "AbruzzoWeb": "https://www.abruzzoweb.it/feed/",
+    "ANSA Abruzzo": "https://www.ansa.it/abruzzo/notizie/abruzzo_rss.xml",
+    "TVSei": "https://www.tvsei.it/feed/",
 }
 
 def clean_html(raw_html):

@@ -9,7 +9,7 @@ EXCLUDE_CITIES = [
 # Blacklist per filtri di rumore (Sport, Spettacolo, Scienza/Meteo, Eventi)
 NOISE_KEYWORDS = [
     "calcio", "partita", "serie a", "serie b", "serie c", "eccellenza", "gol", "rigore", 
-    "allenatore", "squadra", "mercato", "piscina", "basket", "volley", "maratona", "torneo",
+    "allenatore", "squadra", "calciomercato", "piscina", "basket", "volley", "maratona", "torneo",
     "eclissi", "luna", "stelle", "meteo", "previsioni", "caldo", "ondata di calore",
     "concerto", "mostra", "sagra", "festa", "spettacolo", "teatro", "cinema", "oroscopo",
     "donare", "donazione", "avis", "fidas", "trasfusione", "carenza sangue"
