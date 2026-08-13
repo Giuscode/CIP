@@ -1,0 +1,61 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": { "name": "Centro" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.205, 42.472], [14.222, 42.470], [14.220, 42.463], [14.205, 42.464], [14.205, 42.472]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Portanuova" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.215, 42.462], [14.232, 42.460], [14.228, 42.448], [14.210, 42.450], [14.215, 42.462]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Rancitelli" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.188, 42.460], [14.204, 42.459], [14.202, 42.450], [14.186, 42.451], [14.188, 42.460]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Tiburtina / Villa Redenta" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.192, 42.450], [14.212, 42.449], [14.208, 42.438], [14.190, 42.439], [14.192, 42.450]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Colli" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.180, 42.482], [14.204, 42.480], [14.202, 42.468], [14.178, 42.470], [14.180, 42.482]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Fontanelle" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.198, 42.440], [14.215, 42.439], [14.212, 42.428], [14.195, 42.429], [14.198, 42.440]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Zanni" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[14.175, 42.495], [14.192, 42.492], [14.190, 42.482], [14.173, 42.484], [14.175, 42.495]]]
+        }
+      }
+    ]
+  }

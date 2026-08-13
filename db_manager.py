@@ -1,10 +1,17 @@
 import json
 import os
 
-DB_FILE = "database.json"
+DATA_DIR = "data"
+DB_FILE = os.path.join(DATA_DIR, "database.json")
+
+def ensure_data_dir():
+    """Assicura che la cartella data esista."""
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
 
 def load_database():
     """Carica le notizie salvate dal file JSON."""
+    ensure_data_dir()
     if not os.path.exists(DB_FILE):
         return []
     try:
@@ -16,6 +23,7 @@ def load_database():
 
 def save_database(data):
     """Salva la lista di notizie aggiornata nel file JSON."""
+    ensure_data_dir()
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
